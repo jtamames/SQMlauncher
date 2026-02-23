@@ -1,0 +1,252 @@
+library(shiny)
+library(shinyjs)
+library(shinyFiles)
+library(bslib)
+
+ui <- page_navbar(
+  
+  title = "SQMLauncher",
+  
+  navbar_options = navbar_options(
+    bg = "#1f4e79",
+    theme = "dark"
+  ),
+  
+  theme = bs_theme(
+    version = 5,
+    bg = "#f4f6f9",
+    fg = "#212529",
+    primary = "#1f4e79"
+  ),
+  
+  header = tagList(
+    tags$style(HTML("
+      
+      /* GLOBAL COMPACT SIDEBAR */
+      .compact-sidebar * {
+        margin-bottom: 4px !important;
+      }
+
+      .compact-sidebar .card-body {
+        padding: 6px !important;
+      }
+
+      .compact-sidebar .card-header {
+        padding: 6px 8px !important;
+        font-size: 0.95rem;
+      }
+
+      .compact-sidebar input,
+      .compact-sidebar select {
+        height: 30px !important;
+        padding: 2px 6px !important;
+        font-size: 0.9rem !important;
+      }
+
+      .compact-sidebar .btn {
+        padding: 4px 8px !important;
+        font-size: 0.9rem !important;
+      }
+
+      .compact-sidebar label {
+        font-size: 0.9rem !important;
+      }
+
+      .compact-sidebar .accordion-button {
+        padding: 4px 6px !important;
+        font-size: 0.9rem;
+      }
+
+      .compact-sidebar .accordion-body {
+        padding: 6px 8px !important;
+      }
+
+    "))
+  ),
+  
+  nav_panel(
+    "Run",
+    
+    layout_sidebar(
+      
+      sidebar = sidebar(
+        width = 300,
+        
+        div(class = "compact-sidebar",
+            
+            # ---------------- Project Setup ----------------
+            card(
+              card_header("Project Setup"),
+              
+              textInput("project_name", "Project name"),
+              
+              selectInput(
+                "program",
+                "Program",
+                choices = c(
+                  "SqueezeMeta" = "SqueezeMeta.pl",
+                  "sqm_reads" = "sqm_reads.pl",
+                  "sqm_longreads" = "sqm_longreads.pl"
+                )
+              ),
+              
+              selectInput(
+                "mode",
+                "Execution mode",
+                choices = c("coassembly", "sequential")
+              )
+            ),
+            
+            # ---------------- Input Files ----------------
+            card(
+              card_header("Input Files"),
+              
+              shinyFilesButton(
+                id = "samples_file",
+                label = "Samples file (-s)",
+                title = "Choose file",
+                multiple = FALSE
+              ),
+              verbatimTextOutput("samples_path"),
+              
+              shinyDirButton(
+                id = "input_dir",
+                label = "Input directory (-f)",
+                title = "Choose directory",
+                multiple = FALSE
+              ),
+              verbatimTextOutput("input_path"),
+              
+              shinyDirButton(
+                id = "workdir",
+                label = "Working directory",
+                title = "Choose directory",
+                multiple = FALSE
+              ),
+              verbatimTextOutput("workdir_path")
+            ),
+            
+            # ---------------- Advanced Settings ----------------
+            card(
+              card_header("Advanced Settings"),
+              
+              accordion(
+                open = FALSE,
+                multiple = TRUE,
+                
+                accordion_panel(
+                  "Filtering",
+                  checkboxInput("trim_reads", "Enable trimming", FALSE),
+                  checkboxInput("remove_low_complexity", "Remove low complexity", FALSE)
+                ),
+                
+                accordion_panel(
+                  "Assembly",
+                  selectInput("assembler", "Assembler",
+                              choices = c("megahit", "spades"))
+                ),
+                
+                accordion_panel(
+                  "Mapping",
+                  selectInput("mapper", "Mapper",
+                              choices = c("bowtie2", "minimap2"))
+                ),
+                
+                accordion_panel(
+                  "Annotation",
+                  checkboxInput("use_kegg", "KEGG", TRUE),
+                  checkboxInput("use_cog", "COG", TRUE)
+                ),
+                
+                accordion_panel(
+                  "Binning",
+                  checkboxInput("run_metabat", "MetaBAT2", TRUE),
+                  checkboxInput("run_maxbin", "MaxBin2", FALSE)
+                ),
+                
+                accordion_panel(
+                  "Performance",
+                  numericInput("numthreads", "Threads (-t)", 8, min = 1)
+                )
+              )
+            ),
+            
+            div(
+              style = "display:flex; gap:6px; margin-top:6px;",
+              actionButton("run", "Run", class = "btn-primary"),
+              actionButton("stop", "Abort", class = "btn-danger")
+            )
+        )
+      ),
+      
+      # ---------------- Main Panel ----------------
+      card(
+        card_header(
+          div(
+            style="display:flex; justify-content:space-between; align-items:center;",
+            span("Execution Status"),
+            uiOutput("status_badge")
+          )
+        ),
+        
+        card_body(
+          div(
+            style="
+              background-color:#f1f3f5;
+              color:#212529;
+              padding:12px;
+              font-family: monospace;
+              font-size:13px;
+              height:600px;
+              overflow-y:auto;
+              border-radius:6px;
+              border:1px solid #dee2e6;
+            ",
+            verbatimTextOutput("log")
+          )
+        )
+      )
+    )
+  ),
+  
+  nav_panel("Results", h4("Results viewer coming soon...")),
+  nav_panel("About", p("SQMLauncher — Advanced GUI for SqueezeMeta"))
+)
+
+server <- function(input, output, session) {
+  
+  useShinyjs()
+  
+  roots <- c(home = normalizePath("~"))
+  
+  shinyFileChoose(input, "samples_file", roots = roots)
+  shinyDirChoose(input, "input_dir", roots = roots)
+  shinyDirChoose(input, "workdir", roots = roots)
+  
+  samples_path <- reactive({
+    req(input$samples_file)
+    parseFilePaths(roots, input$samples_file)$datapath
+  })
+  
+  input_path <- reactive({
+    req(input$input_dir)
+    parseDirPath(roots, input$input_dir)
+  })
+  
+  workdir_path <- reactive({
+    req(input$workdir)
+    parseDirPath(roots, input$workdir)
+  })
+  
+  output$samples_path <- renderText({ samples_path() })
+  output$input_path   <- renderText({ input_path() })
+  output$workdir_path <- renderText({ workdir_path() })
+  
+  output$status_badge <- renderUI({
+    span(class = "badge bg-secondary", "Idle")
+  })
+  
+  output$log <- renderText({ "" })
+}
+
+shinyApp(ui, server)

@@ -1,18 +1,19 @@
-#' Run squeezeMetaR Shiny app
+#' Run SQMLauncher Shiny App
+#'
+#' Launches the SQMLauncher graphical interface.
+#'
 #' @export
 run_app <- function() {
 
   app_dir <- system.file("shiny", package = "squeezeMetaR")
 
   if (app_dir == "") {
-    stop("Shiny app directory not found.")
+    stop("Could not find the Shiny app directory.")
   }
 
-  # Forzar navegador sin depender de getOption("browser")
+  # Prevent browseURL errors
   shiny::runApp(
-    app_dir,
-    launch.browser = function(url) {
-      system2("xdg-open", url)
-    }
+    appDir = app_dir,
+    launch.browser = interactive()
   )
 }
