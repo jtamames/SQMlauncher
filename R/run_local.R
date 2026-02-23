@@ -18,7 +18,8 @@ run_squeezemeta <- function(program,
                             project_name,
                             workdir,
                             mode = "coassembly",
-                            threads = 8) {
+                            threads = 8,
+                            run_trimmomatic = FALSE) {
 
   # -----------------------------
   # Validation
@@ -72,6 +73,9 @@ run_squeezemeta <- function(program,
     args <- c(args, "-m", mode)
   }
   
+  if (program == "SqueezeMeta.pl" && run_trimmomatic) {
+  args <- c(args, "--cleaning")
+}
   # -----------------------------
   # Prepare log file
   # -----------------------------

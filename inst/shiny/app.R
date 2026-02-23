@@ -145,11 +145,15 @@ ui <- page_navbar(
             )
           ),
           
+          conditionalPanel(
+          condition = "input.program == 'SqueezeMeta.pl'",
           selectInput(
-            "mode",
-            "Execution mode",
-            choices = c("coassembly", "sequential")
-          )
+           "mode",
+           "Execution mode",
+           choices = c("coassembly", "sequential","merged","seqmerge"),
+           selectize=FALSE
+         )
+       )
          )
         ),
         
@@ -187,45 +191,57 @@ ui <- page_navbar(
         card(
           card_header("Advanced Settings"),
            div(class = "advanced-compact",
-          accordion(
-            open = FALSE,
-            multiple = TRUE,
-            
-            accordion_panel(
-              "Filtering",
-              checkboxInput("trim_reads", "Enable trimming", FALSE),
-              checkboxInput("remove_low_complexity", "Remove low complexity", FALSE)
-            ),
-            
-            accordion_panel(
-              "Assembly",
-              selectInput("assembler", "Assembler",
-                          choices = c("megahit", "spades"))
-            ),
-            
-            accordion_panel(
-              "Mapping",
-              selectInput("mapper", "Mapper",
-                          choices = c("bowtie2", "minimap2"))
-            ),
-            
-            accordion_panel(
-              "Annotation",
-              checkboxInput("use_kegg", "KEGG", TRUE),
-              checkboxInput("use_cog", "COG", TRUE)
-            ),
-            
-            accordion_panel(
-              "Binning",
-              checkboxInput("run_metabat", "MetaBAT2", TRUE),
-              checkboxInput("run_maxbin", "MaxBin2", FALSE)
-            ),
-            
-            accordion_panel(
-              "Performance",
-              numericInput("numthreads", "Threads (-t)", 8, min = 1)
-            )
-          )
+ 
+         accordion(
+          open = FALSE,
+          multiple = TRUE,
+  
+         accordion_panel(
+           "Filtering",
+           checkboxInput("run_trimmomatic", "Run Trimmomatic", FALSE)
+         ),
+  
+         # ---------- SOLO PARA SqueezeMeta ----------
+         conditionalPanel(
+           condition = "input.program == 'SqueezeMeta.pl'",
+           accordion_panel(
+             "Assembly",
+             selectInput("assembler", "Assembler",
+                         choices = c("megahit", "spades"))
+           )
+         ),
+  
+         conditionalPanel(
+           condition = "input.program == 'SqueezeMeta.pl'",
+           accordion_panel(
+             "Mapping",
+             selectInput("mapper", "Mapper",
+                         choices = c("bowtie2", "minimap2"))
+           )
+         ),
+  
+         conditionalPanel(
+           condition = "input.program == 'SqueezeMeta.pl'",
+           accordion_panel(
+             "Binning",
+             checkboxInput("run_metabat", "MetaBAT2", TRUE),
+             checkboxInput("run_maxbin", "MaxBin2", FALSE)
+           )
+         ),
+  
+         # ---------- SIEMPRE DISPONIBLE ----------
+         accordion_panel(
+           "Annotation",
+           checkboxInput("use_kegg", "KEGG", TRUE),
+           checkboxInput("use_cog", "COG", TRUE)
+         ),
+  
+         accordion_panel(
+           "Performance",
+           numericInput("numthreads", "Threads (-t)", 8, min = 1)
+         )
+       )
+
         ),
         
         div(
@@ -258,7 +274,7 @@ ui <- page_navbar(
               border-radius:6px;
               border:1px solid #dee2e6;
             ",
-            verbatimTextOutput("log")
+            uiOutput("log")
           )
         )
       )
@@ -270,39 +286,180 @@ ui <- page_navbar(
 )
 
 server <- function(input, output, session) {
-  
-  useShinyjs()
-  
+
   roots <- c(home = normalizePath("~"))
-  
-  shinyFileChoose(input, "samples_file", roots = roots)
-  shinyDirChoose(input, "input_dir", roots = roots)
-  shinyDirChoose(input, "workdir", roots = roots)
-  
+
+  shinyFiles::shinyFileChoose(input, "samples_file", roots = roots)
+  shinyFiles::shinyDirChoose(input, "input_dir", roots = roots)
+  shinyFiles::shinyDirChoose(input, "workdir", roots = roots)
+
   samples_path <- reactive({
     req(input$samples_file)
-    parseFilePaths(roots, input$samples_file)$datapath
+    shinyFiles::parseFilePaths(roots, input$samples_file)$datapath
   })
-  
+
   input_path <- reactive({
     req(input$input_dir)
-    parseDirPath(roots, input$input_dir)
+    shinyFiles::parseDirPath(roots, input$input_dir)
   })
-  
+
   workdir_path <- reactive({
     req(input$workdir)
-    parseDirPath(roots, input$workdir)
+    shinyFiles::parseDirPath(roots, input$workdir)
   })
-  
+
   output$samples_path <- renderText({ samples_path() })
-  output$input_path   <- renderText({ input_path() })
+  output$input_path <- renderText({ input_path() })
   output$workdir_path <- renderText({ workdir_path() })
-  
-  output$status_badge <- renderUI({
-    span(class = "badge bg-secondary", "Idle")
+
+  proc <- reactiveVal(NULL)
+  current_log_file <- reactiveVal(NULL)
+  log_buffer <- reactiveVal("")
+  status <- reactiveVal("Idle")
+
+  output$status <- renderText({ status() })
+
+
+
+ observe({
+    if (status() == "Running") {
+      shinyjs::disable("run")
+      shinyjs::enable("stop")
+    } else {
+      shinyjs::enable("run")
+      shinyjs::disable("stop")
+    }
   })
+
+  observeEvent(input$run, {
+
+    req(samples_path(), input_path(), workdir_path(), input$project_name)
+
+    project_dir <- file.path(workdir_path(), input$project_name)
+
+    if (dir.exists(project_dir)) {
+      showNotification("Project directory already exists", type = "error")
+      return()
+    }
+
+    log_buffer("")
+    status("Running")
+
+
+    res <- run_squeezemeta(
+      program = input$program,
+      samples_file = samples_path(),
+      input_dir = input_path(),
+      project_name = input$project_name,
+      workdir = workdir_path(),
+      mode = input$mode,
+      threads = input$numthreads,
+      run_trimmomatic = input$run_trimmomatic
+    )
+
+    proc(res$process)
+    current_log_file(res$log_file)
+
+    showNotification("Process started", type = "message")
+  })
+
+  observe({
+
+    p <- proc()
+    log_file <- current_log_file()
+
+    req(p, log_file)
+
+    invalidateLater(2000, session)
+
+    if (file.exists(log_file)) {
+
+   log_content <- tryCatch({
+
+    lines <- readLines(log_file, warn = FALSE)
+
+    # Eliminar mensajes Broken pipe
+    lines <- lines[!grepl("Broken pipe", lines)]
+
+    # Eliminar códigos ANSI (colores)
+    lines <- gsub("\033\\[[0-9;]*m", "", lines)
+
+    paste(lines, collapse = "\n")
+
+  }, error = function(e) log_buffer())
+ 
   
-  output$log <- renderText({ "" })
+
+      log_buffer(log_content)
+    }
+
+    if (!p$is_alive()) {
+
+      exit_status <- p$get_exit_status()
+
+      if (!is.null(exit_status)) {
+        if (exit_status == 0) {
+          status("Finished")
+        } else {
+          status("Error")
+        }
+
+        showNotification(
+          paste("Process finished with status:", exit_status),
+          type = ifelse(exit_status == 0, "message", "error")
+        )
+      }
+
+      proc(NULL)
+    }
+  })
+
+  observeEvent(input$stop, {
+
+    showModal(
+      modalDialog(
+        title = "Confirm Abort",
+        "Are you sure you want to abort the running process?",
+        footer = tagList(
+          modalButton("Cancel"),
+          actionButton("confirm_abort", "Yes, abort", class = "btn-danger")
+        )
+      )
+    )
+  })
+
+  observeEvent(input$confirm_abort, {
+
+    removeModal()
+
+    p <- proc()
+
+    if (!is.null(p) && p$is_alive()) {
+
+      p$kill_tree()
+
+      log_buffer(
+        paste(
+          log_buffer(),
+          "\n--- PROCESS ABORTED BY USER ---\n",
+          sep = "\n"
+        )
+      )
+
+      status("Aborted")
+
+      showNotification("Process aborted", type = "warning")
+
+      proc(NULL)
+    }
+  })
+
+output$log <- renderUI({
+  tags$pre(
+    style = "margin:0;",
+    log_buffer()
+  )
+})
 }
 
 shinyApp(ui, server)

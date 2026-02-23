@@ -1,12 +1,20 @@
 #' Build SqueezeMeta command
 #' @export
-build_sm_command <- function(project,
+build_sm_command <- function(program,
+                             project,
                              sample_file,
                              input_dir,
                              mode = "sequential",
-                             threads = 8) {
+                             threads = 8,
+                             run_trimmomatic = FALSE) {
 
-  sm <- check_squeezemeta()
+  # Detect executable
+  exe <- switch(program,
+                "SqueezeMeta.pl" = check_squeezemeta(),
+                "sqm_reads.pl" = "sqm_reads.pl",
+                "sqm_longreads.pl" = "sqm_longreads.pl",
+                stop("Unknown program selected")
+  )
 
   if (!file.exists(sample_file)) {
     stop("Sample file not found.")
@@ -24,7 +32,9 @@ build_sm_command <- function(project,
     "-t", threads
   )
 
-  paste(sm, paste(args, collapse = " "))
+  if (run_trimmomatic && program == "SqueezeMeta.pl") {
+    args <- c(args, "--cleaning")
+  }
+
+  paste(exe, paste(args, collapse = " "))
 }
-
-
