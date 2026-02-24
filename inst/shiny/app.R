@@ -104,7 +104,28 @@ ui <- page_navbar(
         padding: 4px 10px !important;
         font-size: 0.9rem;
       }
-      
+ 
+      .annotation-compact .form-check {
+      margin-bottom: 2px !important;
+     }
+
+     .annotation-compact .shiny-input-container {
+       margin-bottom: 4px !important;
+     }
+
+     .annotation-box {
+       border: 1px solid #dee2e6;
+       border-radius: 6px;
+       padding: 6px 8px;
+       margin-bottom: 6px;
+       background-color: #f8f9fa;
+     }
+
+     .annotation-title {
+       font-weight: 500;
+       font-size: 0.9rem;
+       margin-bottom: 4px;
+     }     
       .binning-compact .form-check {
       margin-bottom: 2px !important;
       }
@@ -264,6 +285,39 @@ ui <- page_navbar(
              )
             ) 
           ),
+ 
+  accordion_panel(
+    "Annotation",
+
+    div(class = "annotation-compact",
+
+      # ----- Caja recuadrada -----
+      div(
+        class = "annotation-box",
+        tags$div(
+          class = "annotation-title",
+          "Disable annotations"
+        ),
+
+        checkboxInput("no_cog", "No COG", FALSE),
+        checkboxInput("no_kegg", "No KEGG", FALSE),
+        checkboxInput("no_pfam", "No PFAM", TRUE)
+      ),
+
+      # ----- Otras opciones -----
+      checkboxInput("eukaryotes", "Eukaryotes", FALSE),
+      checkboxInput("doublepass", "Doublepass", FALSE),
+
+      shinyFilesButton(
+        id = "external_dbs",
+        label = "External DBs",
+        title = "Select file",
+        multiple = FALSE
+      ),
+
+      div(class = "file-path", textOutput("extdb_path"))
+    )
+   ),         
   
          conditionalPanel(
            condition = "input.program == 'SqueezeMeta.pl'",
@@ -328,11 +382,7 @@ ui <- page_navbar(
 
 
          # ---------- SIEMPRE DISPONIBLE ----------
-         accordion_panel(
-           "Annotation",
-           checkboxInput("use_kegg", "KEGG", TRUE),
-           checkboxInput("use_cog", "COG", TRUE)
-         ),
+
   
          accordion_panel(
            "Performance",
@@ -391,7 +441,8 @@ server <- function(input, output, session) {
   shinyFiles::shinyFileChoose(input, "samples_file", roots = roots)
   shinyFiles::shinyDirChoose(input, "input_dir", roots = roots)
   shinyFiles::shinyDirChoose(input, "workdir", roots = roots)
-
+  shinyFiles::shinyFileChoose(input, "external_dbs", roots = roots)
+  
   samples_path <- reactive({
     req(input$samples_file)
     shinyFiles::parseFilePaths(roots, input$samples_file)$datapath
@@ -407,6 +458,15 @@ server <- function(input, output, session) {
     shinyFiles::parseDirPath(roots, input$workdir)
   })
 
+  extdb_path <- reactive({
+    req(input$external_dbs)
+    shinyFiles::parseFilePaths(roots, input$external_dbs)$datapath
+  })
+
+  output$extdb_path <- renderText({
+    extdb_path()
+  })
+  
   output$samples_path <- renderText({ samples_path() })
   output$input_path <- renderText({ input_path() })
   output$workdir_path <- renderText({ workdir_path() })
@@ -435,6 +495,8 @@ server <- function(input, output, session) {
     req(samples_path(), input_path(), workdir_path(), input$project_name)
 
     project_dir <- file.path(workdir_path(), input$project_name)
+    
+    extdb = if (!is.null(input$external_dbs)) extdb_path() else NULL
 
     if (dir.exists(project_dir)) {
       showNotification("Project directory already exists", type = "error")
@@ -459,6 +521,12 @@ server <- function(input, output, session) {
       assembly_options = input$assembly_options,
       min_contig_length = input$min_contig_length,
       use_singletons = input$use_singletons,
+      no_cog = input$no_cog,
+      no_kegg = input$no_kegg,
+      no_pfam = input$no_pfam,
+      eukaryotes = input$eukaryotes,
+      doublepass = input$doublepass,
+      extdb = if (!is.null(input$external_dbs)) extdb_path() else NULL,
       mapper = input$mapper,
       mapping_options = input$mapping_options,
       no_bins = input$no_bins,

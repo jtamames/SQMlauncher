@@ -25,6 +25,12 @@ run_squeezemeta <- function(program,
                             assembly_options = NULL,
                             min_contig_length = 200,
                             use_singletons = FALSE,
+                            no_cog = FALSE,
+                            no_kegg = FALSE,
+                            no_pfam = TRUE,
+                            eukaryotes = FALSE,
+                            doublepass = FALSE,
+                            extdb = NULL,
                             mapper = "bowtie",
                             mapping_options = NULL,
                             no_bins = FALSE,
@@ -79,6 +85,30 @@ run_squeezemeta <- function(program,
     "-t", as.character(threads)
   )
   
+  if (no_cog) {
+    args <- c(args, "--nocog")
+  }
+
+  if (no_kegg) {
+    args <- c(args, "--nokegg")
+  }
+
+  if (no_pfam) {
+    args <- c(args, "--nopfam")
+  }
+
+  if (eukaryotes) {
+    args <- c(args, "--euk")
+  }
+
+  if (doublepass) {
+    args <- c(args, "--D")
+  }
+
+  if (!is.null(extdb) && extdb != "") {
+    args <- c(args, "-extdb", extdb)
+  }
+
   # Solo añadir -m si es SqueezeMeta
   if (program == "SqueezeMeta.pl") {
     args <- c(args, "-m", mode)
