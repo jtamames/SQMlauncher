@@ -105,6 +105,17 @@ ui <- page_navbar(
         font-size: 0.9rem;
       }
       
+      .binning-compact .form-check {
+      margin-bottom: 2px !important;
+      }
+
+      .binning-compact .form-check-label {
+      font-size: 0.9rem !important;
+     }
+
+      .binning-compact .shiny-input-container {
+      margin-bottom: 4px !important;
+    }      
      .advanced-compact .accordion-button {
        padding: 4px 8px !important;
        font-size: 0.9rem !important;
@@ -205,20 +216,54 @@ ui <- page_navbar(
           multiple = TRUE,
   
          accordion_panel(
-           "Filtering",
-           checkboxInput("run_trimmomatic", "Run Trimmomatic", FALSE)
+          "Filtering",
+  
+          checkboxInput("run_trimmomatic", "Run Trimmomatic", FALSE),
+  
+          conditionalPanel(
+          condition = "input.run_trimmomatic == true",
+    
+            textInput(
+            "cleaning_parameters",
+            "Parameters",
+            value = "LEADING:8 TRAILING:8 SLIDINGWINDOW:10:15 MINLEN:30"
+             )
+          )
          ),
   
          # ---------- SOLO PARA SqueezeMeta ----------
          conditionalPanel(
            condition = "input.program == 'SqueezeMeta.pl'",
-           accordion_panel(
+            accordion_panel(
              "Assembly",
-             selectInput("assembler", "Assembler",
-                         choices = c("megahit", "spades","rnaspades","canu","flye")
-           )
-           )
-         ),
+  
+            selectInput(
+             "assembler",
+             "Assembler",
+              choices = c("megahit", "spades", "rnaspades", "canu", "flye"),
+             selectize = FALSE
+              ),
+  
+             textInput(
+            "assembly_options",
+            "Assembly options (optional)",
+            placeholder = ""
+            ),
+  
+           numericInput(
+            "min_contig_length",
+            "Min contig length",
+             value = 200,
+             min = 0
+            ),
+  
+           checkboxInput(
+           "use_singletons",
+           "use singletons",
+            FALSE
+             )
+            ) 
+          ),
   
          conditionalPanel(
            condition = "input.program == 'SqueezeMeta.pl'",
@@ -236,15 +281,52 @@ ui <- page_navbar(
                     )
                  ),
   
-         conditionalPanel(
-           condition = "input.program == 'SqueezeMeta.pl'",
-           accordion_panel(
-             "Binning",
-             checkboxInput("run_metabat", "MetaBAT2", TRUE),
-             checkboxInput("run_maxbin", "MaxBin2", FALSE)
-           )
-         ),
+  conditionalPanel(
+    condition = "input.program == 'SqueezeMeta.pl'",
   
+    accordion_panel(
+      "Binning",
+    
+      div(class = "binning-compact",
+      
+        checkboxInput("no_bins", "No bins", FALSE),
+      
+        conditionalPanel(
+          condition = "input.no_bins == false",
+        
+          checkboxInput("only_bins", "Only bins", FALSE),
+        
+          div(
+            style = "
+              border: 1px solid #dee2e6;
+              border-radius: 6px;
+              padding: 6px 8px;
+              margin-top: 4px;
+              background-color: #f8f9fa;
+            ",
+          
+            tags$div(
+              style = "font-weight: 500; font-size: 0.9rem; margin-bottom: 4px;",
+              "Binners"
+            ),
+          
+            checkboxGroupInput(
+              "binners",
+              NULL,
+              choices = c(
+                "Concoct" = "concoct",
+                "Metabat2" = "metabat2",
+                "MaxBin" = "maxbin"
+              ),
+              selected = c("concoct", "metabat2")
+            )
+          )
+        )
+      )
+    )
+  ),
+
+
          # ---------- SIEMPRE DISPONIBLE ----------
          accordion_panel(
            "Annotation",
@@ -372,9 +454,16 @@ server <- function(input, output, session) {
       mode = input$mode,
       threads = input$numthreads,
       run_trimmomatic = input$run_trimmomatic,
+      cleaning_parameters = input$cleaning_parameters,
       assembler = input$assembler,
+      assembly_options = input$assembly_options,
+      min_contig_length = input$min_contig_length,
+      use_singletons = input$use_singletons,
       mapper = input$mapper,
-      mapping_options = input$mapping_options
+      mapping_options = input$mapping_options,
+      no_bins = input$no_bins,
+      only_bins = input$only_bins,
+      binners = input$binners
     )
 
     proc(res$process)
@@ -425,6 +514,7 @@ observe({
   }
 })
 
+
   observeEvent(input$stop, {
 
     showModal(
@@ -465,6 +555,32 @@ observe({
     }
   })
 
+  # Si se marca No bins
+  observeEvent(input$no_bins, {
+    if (input$no_bins) {
+
+      # Desactivar only_bins
+      updateCheckboxInput(session, "only_bins", value = FALSE)
+
+      # Quitar selección de binners
+      updateCheckboxGroupInput(session, "binners", selected = character(0))
+    } else {
+
+      # Restaurar valores por defecto si se desmarca no_bins
+      updateCheckboxGroupInput(
+        session,
+        "binners",
+        selected = c("concoct", "metabat2")
+      )
+    }
+  })
+
+  observeEvent(input$only_bins, {
+    if (input$only_bins) {
+      updateCheckboxInput(session, "no_bins", value = FALSE)
+    }
+  })
+  
 output$log <- renderUI({
   tags$pre(
     style = "margin:0;",

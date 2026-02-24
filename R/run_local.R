@@ -20,9 +20,17 @@ run_squeezemeta <- function(program,
                             mode = "coassembly",
                             threads = 8,
                             run_trimmomatic = FALSE,
+                            cleaning_parameters = NULL,
                             assembler = "megahit",
+                            assembly_options = NULL,
+                            min_contig_length = 200,
+                            use_singletons = FALSE,
                             mapper = "bowtie",
-                            mapping_options = NULL) {
+                            mapping_options = NULL,
+                            no_bins = FALSE,
+		            only_bins = FALSE,
+                            binners = "concoct,metabat2"
+                            ) {
 
   # -----------------------------
   # Validation
@@ -78,15 +86,34 @@ run_squeezemeta <- function(program,
   
   if (program == "SqueezeMeta.pl" && run_trimmomatic) {
     args <- c(args, "--cleaning")
+      if (!is.null(cleaning_parameters) && cleaning_parameters != "") {
+     args <- c(args, "-cleaning_options", cleaning_parameters)
+  }
+
   }
 
   if (program == "SqueezeMeta.pl" && !is.null(assembler) && assembler != "") {
     args <- c(args, "-a", assembler)
   }
   
-  if (!is.null(mapper) && mapper != "") {
-  args <- c(args, "-map", mapper)
- }
+   # Assembly options
+  if (!is.null(assembly_options) && assembly_options != "") {
+    args <- c(args, "-assembly_options", assembly_options)
+  }
+
+  # Min contig length
+  if (!is.null(min_contig_length)) {
+    args <- c(args, "-c", as.character(min_contig_length))
+  }
+
+  # Singletons
+  if (use_singletons) {
+    args <- c(args, "--singletons")
+ 
+    if (!is.null(mapper) && mapper != "") {
+    args <- c(args, "-map", mapper)
+   }
+    }
 
  # Mapping options
  
@@ -94,6 +121,22 @@ run_squeezemeta <- function(program,
    args <- c(args, "-mapping_options", mapping_options)
  }
   
+ # ---- BINNING ----
+
+if (no_bins) {
+  args <- c(args, "--nobins")
+
+} else {
+
+  if (only_bins) {
+    args <- c(args, "--onlybins")
+  }
+
+  if (!is.null(binners) && length(binners) > 0) {
+    args <- c(args, "-binners", paste(binners, collapse = ","))
+  }
+}
+ 
   # -----------------------------
   # Prepare log file
   # -----------------------------
