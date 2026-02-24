@@ -36,8 +36,16 @@ ui <- page_navbar(
        font-size: 0.9rem !important;
       border-radius: 4px !important;
      }
+     
+    .bslib-sidebar-layout > .sidebar {
+      overflow: visible !important;
+    }
 
-     .sidebar label {
+    .bslib-sidebar-layout {
+      overflow: visible !important;
+    }
+ 
+    .sidebar label {
        font-size: 0.9rem !important;
        margin-bottom: 3px !important;
      }     
@@ -142,7 +150,7 @@ ui <- page_navbar(
               "SqueezeMeta" = "SqueezeMeta.pl",
               "sqm_reads" = "sqm_reads.pl",
               "sqm_longreads" = "sqm_longreads.pl"
-            )
+             )
           ),
           
           conditionalPanel(
@@ -183,7 +191,7 @@ ui <- page_navbar(
             title = "Choose directory",
             multiple = FALSE
           ),
-         div(class = "file-path", textOutput("workdir_path")),
+         div(class = "file-path", textOutput("workdir_path"))
           )
         ),
         
@@ -207,7 +215,8 @@ ui <- page_navbar(
            accordion_panel(
              "Assembly",
              selectInput("assembler", "Assembler",
-                         choices = c("megahit", "spades"))
+                         choices = c("megahit", "spades","rnaspades","canu","flye")
+           )
            )
          ),
   
@@ -216,9 +225,16 @@ ui <- page_navbar(
            accordion_panel(
              "Mapping",
              selectInput("mapper", "Mapper",
-                         choices = c("bowtie2", "minimap2"))
-           )
-         ),
+                         choices = c("bowtie", "bwa", "minimap2-ont", "minimap2-pb", "minimap2-sr"),
+                         selectize = FALSE),
+                         
+                       textInput(
+                            "mapping_options",
+                            "Mapping options (optional)",
+                            placeholder = ""
+                         )  
+                    )
+                 ),
   
          conditionalPanel(
            condition = "input.program == 'SqueezeMeta.pl'",
@@ -288,6 +304,7 @@ ui <- page_navbar(
 server <- function(input, output, session) {
 
   roots <- c(home = normalizePath("~"))
+  last_line_read <- reactiveVal(0)
 
   shinyFiles::shinyFileChoose(input, "samples_file", roots = roots)
   shinyFiles::shinyDirChoose(input, "input_dir", roots = roots)
@@ -354,7 +371,10 @@ server <- function(input, output, session) {
       workdir = workdir_path(),
       mode = input$mode,
       threads = input$numthreads,
-      run_trimmomatic = input$run_trimmomatic
+      run_trimmomatic = input$run_trimmomatic,
+      assembler = input$assembler,
+      mapper = input$mapper,
+      mapping_options = input$mapping_options
     )
 
     proc(res$process)
@@ -363,56 +383,47 @@ server <- function(input, output, session) {
     showNotification("Process started", type = "message")
   })
 
-  observe({
+observe({
 
-    p <- proc()
-    log_file <- current_log_file()
+  p <- proc()
+  req(p)
 
-    req(p, log_file)
+  invalidateLater(1000, session)
 
-    invalidateLater(2000, session)
+  # Leer stdout
+  out <- p$read_output_lines()
+  if (length(out) > 0) {
+    out <- out[!grepl("Broken pipe", out)]
+    out <- gsub("\033\\[[0-9;]*m", "", out)
 
-    if (file.exists(log_file)) {
+    log_buffer(
+      paste(log_buffer(), paste(out, collapse = "\n"), sep = "\n")
+    )
+  }
 
-   log_content <- tryCatch({
+  # Leer stderr
+  err <- p$read_error_lines()
+  if (length(err) > 0) {
+    err <- gsub("\033\\[[0-9;]*m", "", err)
 
-    lines <- readLines(log_file, warn = FALSE)
+    log_buffer(
+      paste(log_buffer(), paste(err, collapse = "\n"), sep = "\n")
+    )
+  }
 
-    # Eliminar mensajes Broken pipe
-    lines <- lines[!grepl("Broken pipe", lines)]
+  if (!p$is_alive()) {
 
-    # Eliminar códigos ANSI (colores)
-    lines <- gsub("\033\\[[0-9;]*m", "", lines)
+    exit_status <- p$get_exit_status()
 
-    paste(lines, collapse = "\n")
-
-  }, error = function(e) log_buffer())
- 
-  
-
-      log_buffer(log_content)
+    if (exit_status == 0) {
+      status("Finished")
+    } else {
+      status("Error")
     }
 
-    if (!p$is_alive()) {
-
-      exit_status <- p$get_exit_status()
-
-      if (!is.null(exit_status)) {
-        if (exit_status == 0) {
-          status("Finished")
-        } else {
-          status("Error")
-        }
-
-        showNotification(
-          paste("Process finished with status:", exit_status),
-          type = ifelse(exit_status == 0, "message", "error")
-        )
-      }
-
-      proc(NULL)
-    }
-  })
+    proc(NULL)
+  }
+})
 
   observeEvent(input$stop, {
 

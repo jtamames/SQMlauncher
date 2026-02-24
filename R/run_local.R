@@ -19,7 +19,10 @@ run_squeezemeta <- function(program,
                             workdir,
                             mode = "coassembly",
                             threads = 8,
-                            run_trimmomatic = FALSE) {
+                            run_trimmomatic = FALSE,
+                            assembler = "megahit",
+                            mapper = "bowtie",
+                            mapping_options = NULL) {
 
   # -----------------------------
   # Validation
@@ -74,8 +77,23 @@ run_squeezemeta <- function(program,
   }
   
   if (program == "SqueezeMeta.pl" && run_trimmomatic) {
-  args <- c(args, "--cleaning")
-}
+    args <- c(args, "--cleaning")
+  }
+
+  if (program == "SqueezeMeta.pl" && !is.null(assembler) && assembler != "") {
+    args <- c(args, "-a", assembler)
+  }
+  
+  if (!is.null(mapper) && mapper != "") {
+  args <- c(args, "-map", mapper)
+ }
+
+ # Mapping options
+ 
+ if (!is.null(mapping_options) && mapping_options != "") {
+   args <- c(args, "-mapping_options", mapping_options)
+ }
+  
   # -----------------------------
   # Prepare log file
   # -----------------------------
@@ -100,8 +118,8 @@ run_squeezemeta <- function(program,
   p <- processx::process$new(
     command = sm,
     args = args,
-    stdout = log_file,
-    stderr = log_file,
+    stdout = "|",
+    stderr = "|",
     supervise = TRUE,
     wd = normalizePath(workdir)
   )
