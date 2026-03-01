@@ -139,13 +139,13 @@ run_squeezemeta <- function(program,
   # Singletons
   if (use_singletons) {
     args <- c(args, "--singletons")
+    }
+
+ # Mapping options
  
     if (!is.null(mapper) && mapper != "") {
     args <- c(args, "-map", mapper)
    }
-    }
-
- # Mapping options
  
  if (!is.null(mapping_options) && mapping_options != "") {
    args <- c(args, "-mapping_options", mapping_options)

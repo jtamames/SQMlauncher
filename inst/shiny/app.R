@@ -3,10 +3,16 @@ library(shinyjs)
 library(shinyFiles)
 library(bslib)
 
+if (interactive()) {
+  pkgload::load_all(".") # Esto carga todas las funciones de la carpeta R/
+}
+
 ui <- page_navbar(
   
   title = "SQMLauncher",
-  
+  useShinyjs(),
+
+
   navbar_options = navbar_options(
     bg = "#1f4e79",
     fg = "#1f4e79",
@@ -490,24 +496,34 @@ server <- function(input, output, session) {
     }
   })
 
-  observeEvent(input$run, {
 
-    req(samples_path(), input_path(), workdir_path(), input$project_name)
-
-    project_dir <- file.path(workdir_path(), input$project_name)
-    
-    extdb = if (!is.null(input$external_dbs)) extdb_path() else NULL
-
-    if (dir.exists(project_dir)) {
-      showNotification("Project directory already exists", type = "error")
-      return()
+observeEvent(input$run, {
+  # 1. Validar que los campos obligatorios existen
+  req(samples_path(), input_path(), workdir_path(), input$project_name)
+  
+  # 2. Comprobar si el directorio del proyecto ya existe
+  project_dir <- file.path(workdir_path(), input$project_name)
+  if (dir.exists(project_dir)) {
+    showNotification("Project directory already exists", type = "error")
+    return()
+  }
+  
+    # extdb = if (!is.null(input$external_dbs)) extdb_path() else NULL
+    extdb_val <- NULL
+    if (!is.null(input$external_dbs)) {
+      df_file <- shinyFiles::parseFilePaths(roots, input$external_dbs)
+      if (nrow(df_file) > 0) {
+        extdb_val <- df_file$datapath
+      }
     }
 
-    log_buffer("")
-    status("Running")
-
-
-    res <- run_squeezemeta(
+  # 3. Preparar el estado inicial
+  log_buffer("")
+  
+  # 4. EJECUCIÓN CON TRYCATCH (Aquí estaba el error de sintaxis)
+  res <- tryCatch({
+    # Todo lo que ocurra aquí dentro está protegido contra errores
+    run_squeezemeta(
       program = input$program,
       samples_file = samples_path(),
       input_dir = input_path(),
@@ -526,19 +542,35 @@ server <- function(input, output, session) {
       no_pfam = input$no_pfam,
       eukaryotes = input$eukaryotes,
       doublepass = input$doublepass,
-      extdb = if (!is.null(input$external_dbs)) extdb_path() else NULL,
+      extdb = extdb_val,
       mapper = input$mapper,
       mapping_options = input$mapping_options,
       no_bins = input$no_bins,
       only_bins = input$only_bins,
       binners = input$binners
     )
-
-    proc(res$process)
-    current_log_file(res$log_file)
-
-    showNotification("Process started", type = "message")
+  }, error = function(e) {
+    # Si run_squeezemeta falla, se ejecuta esto:
+    showNotification(
+      paste("Error al lanzar SqueezeMeta:", e$message),
+      type = "error",
+      duration = NULL
+    )
+    print(paste("ERROR EN run_squeezemeta:", e$message))
+    return(NULL) # Importante devolver NULL para que el resto no falle
   })
+  
+  # 5. Si la función devolvió el objeto correctamente, actualizamos la app
+  if (!is.null(res)) {
+    status("Running")
+    proc(res$process)           # Guardamos el proceso de processx
+    current_log_file(res$log_file) # Guardamos la ruta del log
+    showNotification("Process started successfully", type = "message")
+  }
+  
+  # NOTA: He borrado las líneas duplicadas de proc() y current_log_file() 
+  # que tenías fuera del 'if', ya que causarían un error si res es NULL.
+})
 
 observe({
 
