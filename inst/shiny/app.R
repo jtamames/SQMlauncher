@@ -449,8 +449,8 @@ ui <- page_navbar(
     )
   ),
   
-  nav_panel("Results", h4("Results viewer coming soon...")),
-  nav_panel("About", p("SQMLauncher — Advanced GUI for SqueezeMeta"))
+  nav_panel("Results", h4("Results viewer coming soon")),
+  nav_panel("About", p("SQMLauncher — Advanced GUI for SqueezeMeta — v0.1"))
 )
 
 
