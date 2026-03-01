@@ -1,6 +1,6 @@
-# squeezeMetaR
+# SQMlauncher
 
-R/Shiny interface to run and monitor SqueezeMeta locally.
+R/Shiny interface to run and monitor SqueezeMeta/SQM_reads/SQM_longreads locally.
 
 Installation Guide: SQMlauncher (squeezeMetaR)
 This guide provides step-by-step instructions to set up the environment and install SQMlauncher, the graphical user interface for the SqueezeMeta metagenomics pipeline.
