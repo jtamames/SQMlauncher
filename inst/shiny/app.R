@@ -7,6 +7,8 @@ if (interactive()) {
   pkgload::load_all(".") # Esto carga todas las funciones de la carpeta R/
 }
 
+perfiles_nombres <- sapply(get_builtin_profiles(), function(x) x$name)
+
 ui <- page_navbar(
   
   title = "SQMLauncher",
@@ -233,6 +235,18 @@ ui <- page_navbar(
           )
         ),
         
+    conditionalPanel(
+      condition = "input.program == 'SqueezeMeta.pl'",
+      selectInput(
+        "profile_selection",
+        "Load Profile",
+        choices = perfiles_nombres,
+        selected = "Standard Metagenome"
+      ),
+    ),
+    
+
+    
         # ---------------- Advanced Settings ----------------
         card(
           card_header("Advanced Settings"),
@@ -439,11 +453,15 @@ ui <- page_navbar(
   nav_panel("About", p("SQMLauncher — Advanced GUI for SqueezeMeta"))
 )
 
+
+#-------------------------- SERVER --------------------------#
+
 server <- function(input, output, session) {
 
   roots <- c(home = normalizePath("~"))
   last_line_read <- reactiveVal(0)
-
+  current_consensus <- reactiveVal(50)
+  
   shinyFiles::shinyFileChoose(input, "samples_file", roots = roots)
   shinyFiles::shinyDirChoose(input, "input_dir", roots = roots)
   shinyFiles::shinyDirChoose(input, "workdir", roots = roots)
@@ -497,6 +515,44 @@ server <- function(input, output, session) {
   })
 
 
+
+observeEvent(input$program, {
+  if (input$program != "SqueezeMeta.pl") {
+    updateSelectInput(session, "profile_selection", selected = "custom")
+  }
+})
+
+
+  observeEvent(input$profile_selection, {
+    req(input$profile_selection)
+    
+    if (input$program == "SqueezeMeta.pl") {
+
+      profile <- get_profile_by_name(input$profile_selection)
+      
+      if (!is.null(profile)) {
+        params <- profile$parameters
+        
+
+        updateNumericInput(session, "numthreads", value = params$threads)
+        updateSelectInput(session, "mode", selected = params$mode)
+        updateSelectInput(session, "assembler", selected = params$assembler)
+        updateSelectInput(session, "mapper", selected = params$mapper)
+        updateTextInput(session, "assembly_options", value = params$assembly_options)
+        updateCheckboxInput(session, "no_bins", value = params$skip_binning)
+        
+
+        if (!is.null(params$consensus)) {
+          current_consensus(params$consensus)
+        } else {
+          current_consensus(50) 
+        }
+        
+        showNotification(paste("Profile applied:", profile$name), type = "message")
+      }
+    }
+  })
+  
 observeEvent(input$run, {
   # 1. Validar que los campos obligatorios existen
   req(samples_path(), input_path(), workdir_path(), input$project_name)
@@ -520,9 +576,9 @@ observeEvent(input$run, {
   # 3. Preparar el estado inicial
   log_buffer("")
   
-  # 4. EJECUCIÓN CON TRYCATCH (Aquí estaba el error de sintaxis)
+  # 4. EJECUCIÓN CON TRYCATCH
   res <- tryCatch({
-    # Todo lo que ocurra aquí dentro está protegido contra errores
+
     run_squeezemeta(
       program = input$program,
       samples_file = samples_path(),
@@ -543,6 +599,7 @@ observeEvent(input$run, {
       eukaryotes = input$eukaryotes,
       doublepass = input$doublepass,
       extdb = extdb_val,
+      consensus = current_consensus(),      
       mapper = input$mapper,
       mapping_options = input$mapping_options,
       no_bins = input$no_bins,

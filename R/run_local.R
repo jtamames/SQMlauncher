@@ -35,7 +35,8 @@ run_squeezemeta <- function(program,
                             mapping_options = NULL,
                             no_bins = FALSE,
 		            only_bins = FALSE,
-                            binners = "concoct,metabat2"
+                            binners = "concoct,metabat2",
+                            consensus = 50
                             ) {
 
   # -----------------------------
@@ -134,6 +135,11 @@ run_squeezemeta <- function(program,
   # Min contig length
   if (!is.null(min_contig_length)) {
     args <- c(args, "-c", as.character(min_contig_length))
+  }
+  
+  # Consensus
+  if (!is.null(consensus)) {
+    args <- c(args, "-consensus", as.character(consensus))
   }
 
   # Singletons
