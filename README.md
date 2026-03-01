@@ -1,4 +1,4 @@
-# SQMlauncher
+# Installation
 
 R/Shiny interface to run and monitor SqueezeMeta/SQM_reads/SQM_longreads locally.
 
