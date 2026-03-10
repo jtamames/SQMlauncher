@@ -1,55 +1,94 @@
-# Installation
+# SQMlauncher
 
-R/Shiny interface to run and monitor SqueezeMeta/SQM_reads/SQM_longreads locally.
+R/Shiny interface to run and monitor [SqueezeMeta](https://github.com/jtamames/SqueezeMeta) pipelines (SqueezeMeta, SQM_reads, SQM_longreads) locally from your browser.
 
-Before installing the application, ensure your system meets the following requirements:
+---
 
-R Installation: Download and install the latest version of R from CRAN.
+## Requirements
 
-SqueezeMeta: Since this app is a launcher, the SqueezeMeta suite must be installed on your system and available in your system's PATH.
+- [SqueezeMeta](https://github.com/jtamames/SqueezeMeta) installed via conda and available in your PATH
+- The conda environment for SqueezeMeta must be active before installing or running the app
 
-Development Tools: You will need the devtools package to install the application directly from GitHub.
+---
 
-Open your R console or RStudio and run:
-install.packages("devtools")
+## Installation
 
+We provide an installation script that handles all dependencies automatically. It uses `mamba` if available, falling back to `conda` otherwise.
 
+**1. Activate your SqueezeMeta conda environment:**
 
-The application is maintained as an R package named squeezeMetaR. You can install the latest version from the official repository using the following command:
-devtools::install_github("jtamames/SQMlauncher")
+```bash
+conda activate SqueezeMeta   # or your environment name
+```
 
-During installation, R may ask to update existing dependencies. It is recommended to update them to ensure compatibility with the Shiny environment.
+**2. Download and run the installation script:**
 
+```bash
+bash install_sqmlauncher.sh
+```
 
-# Running the app
+The script will:
+- Install all required R/Shiny dependencies from conda-forge (precompiled binaries)
+- Clone this repository into your conda environment
+- Install the `squeezeMetaR` R package
+- Add a convenience `sqm()` function to your `~/.Rprofile`
 
-In your SqueezeMeta conda environment, move to SqueezeMetaR dorectory, open an R console and type:
+### Manual installation
 
+If you prefer to install manually, first install the Shiny dependencies from conda-forge:
+
+```bash
+conda install -c conda-forge r-httpuv r-shiny r-shinyjs r-shinyfiles r-remotes
+```
+
+Then install the package from R:
+
+```r
+remotes::install_local("/path/to/SQMlauncher/", 
+                       force = TRUE, build = TRUE, 
+                       build_vignettes = FALSE, upgrade = "never")
+```
+
+---
+
+## Running the app
+
+If you used the installation script, simply open R and run:
+
+```r
+sqm()
+```
+
+Or manually:
+
+```r
 library(squeezeMetaR)
-
+lazyLoad(file.path(find.package("squeezeMetaR"), "R", "squeezeMetaR"), envir = globalenv())
 run_app()
+```
 
-The interface will open in your default web browser
+The interface will open in your default web browser.
 
+---
 
-# Configuration and Usage Notes
+## Features
 
-Path Verification: Upon launching, the application checks for the existence of SqueezeMeta.pl. Ensure your environment variables are correctly configured if the program is not detected.
+- **Execution profiles** — pre-defined profiles for common use cases:
+  - *Standard Metagenome*: default settings for Illumina/short-read data
+  - *Nanopore Metagenome*: optimized settings for long-read data, with automatic adjustment of consensus and assembly parameters
+- **Real-time monitoring** — live log updates and non-blocking pipeline execution via `processx` and `shinyjs`
+- **Path verification** — checks for `SqueezeMeta.pl` on launch and warns if the environment is not correctly configured
 
-Execution Profiles: The launcher includes pre-defined profiles:
+---
 
-Standard Metagenome: Default settings for Illumina/short-read data.
+## Troubleshooting
 
-Nanopore Metagenome: Optimized settings for long-read data (automatically adjusts consensus and assembly parameters).
+**The app fails to start or the Run button does not respond:**
+- Make sure your SqueezeMeta conda environment is active
+- Verify all dependencies are installed by re-running `install_sqmlauncher.sh`
+- Check the R console for error messages
+- Ensure you have write permissions in the Working Directory selected in the app
 
-Real-time Monitoring: The application utilizes the processx and shinyjs packages to provide live log updates and non-blocking execution of the pipeline.
+**R cannot find `run_app` after `library(squeezeMetaR)`:**
 
-# Troubleshooting
-
-If the application fails to start or the "Run" button does not respond:
-
-Verify that all dependencies are installed by running devtools::install_github("jtamames/SQMlauncher") again.
-
-Check the R console for error messages.
-
-Ensure you have write permissions in the selected Working Directory within the app.
+This is a known issue in some conda environments where the package namespace does not load correctly. Use the `lazyLoad` workaround shown above, or reinstall using the provided script which configures this automatically via `~/.Rprofile`.
