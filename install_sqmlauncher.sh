@@ -42,7 +42,7 @@ echo ""
 echo "[1/3] Installing R dependencies from conda-forge..."
 
 # Use mamba if available (faster), fall back to conda on failure
-PKGS="r-httpuv r-shiny r-shinyjs r-shinyfiles r-remotes"
+PKGS="r-httpuv r-shiny r-shinyjs r-shinyfiles r-remotes r-pkgload r-pkgbuild"
 if command -v mamba &> /dev/null; then
     echo "    mamba detected, trying mamba for faster installation..."
     if ! mamba install -y -c conda-forge $PKGS; then
